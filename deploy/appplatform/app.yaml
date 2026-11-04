@@ -1,0 +1,219 @@
+# Create the app with:
+#   doctl apps create --spec deploy/appplatform/app.yaml
+# Then replace each SECRET placeholder in the control panel.
+# App Platform encrypts a SECRET value on first submission.
+#
+# Jobs do not inherit service envs, so the gc job repeats the storage list.
+# YAML anchors are not used.
+
+name: littlekittyvcs
+# Same region as the Spaces bucket.
+region: "<region>"
+
+services:
+  - name: app
+    github:
+      # GitHub owner and this repository. Form owner/name.
+      repo: "<owner>/littlekittyvcs"
+      branch: main
+      deploy_on_push: false
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 1
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        scope: RUN_TIME
+        type: GENERAL
+      # 32 bytes, standard base64.
+      - key: MASTER_KEY
+        value: "<32-byte-base64>"
+        scope: RUN_TIME
+        type: SECRET
+      # Absolute http or https URL of the bucket.
+      - key: S3_ENDPOINT
+        value: "<https://example.digitaloceanspaces.com>"
+        scope: RUN_TIME
+        type: GENERAL
+      # Region string that endpoint expects.
+      - key: S3_REGION
+        value: "<region>"
+        scope: RUN_TIME
+        type: GENERAL
+      # Bucket the operator already created.
+      - key: S3_BUCKET
+        value: "<bucket>"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: S3_ACCESS_KEY
+        value: "<set in the control panel>"
+        scope: RUN_TIME
+        type: SECRET
+      - key: S3_SECRET_KEY
+        value: "<set in the control panel>"
+        scope: RUN_TIME
+        type: SECRET
+      # Default false. Spaces wants virtual-host addressing.
+      - key: S3_PATH_STYLE
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: PORT
+        value: "8080"
+        scope: RUN_TIME
+        type: GENERAL
+      # Optional absolute http or https URL. Empty is valid.
+      - key: PUBLIC_URL
+        value: ""
+        scope: RUN_TIME
+        type: GENERAL
+      - key: ANONYMOUS_READ
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: DENY_NON_FAST_FORWARD
+        value: "true"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: AUTO_CREATE
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      # Backup is off. To turn it on, set BACKUP_ENABLED to "true" and
+      # uncomment the variables below. S3_ACCESS_KEY_BACKUP and
+      # S3_SECRET_KEY_BACKUP are type SECRET. The endpoint and bucket must
+      # not both match the primary.
+      - key: BACKUP_ENABLED
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      # - key: BACKUP_INTERVAL
+      #   value: "<duration, for example 6h>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_ENDPOINT_BACKUP
+      #   value: "<https://example.digitaloceanspaces.com>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_REGION_BACKUP
+      #   value: "<region>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_BUCKET_BACKUP
+      #   value: "<bucket>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_ACCESS_KEY_BACKUP
+      #   value: "<set in the control panel>"
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: S3_SECRET_KEY_BACKUP
+      #   value: "<set in the control panel>"
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: S3_PATH_STYLE_BACKUP
+      #   value: "false"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+
+databases:
+  # The cluster is created first in the DigitalOcean control panel.
+  # This spec attaches that existing production cluster. The app spec
+  # reference requires cluster_name for a production database. For a dev
+  # database, a missing cluster_name would make App Platform provision one.
+  - name: db
+    engine: PG
+    version: "17"
+    production: true
+    cluster_name: "<your cluster>"
+
+jobs:
+  - name: gc
+    kind: SCHEDULED
+    schedule:
+      # Once a day. Minute 17 avoids the top of the hour.
+      cron: "17 3 * * *"
+      time_zone: UTC
+    github:
+      repo: "<owner>/littlekittyvcs"
+      branch: main
+      deploy_on_push: false
+    dockerfile_path: Dockerfile
+    # The image ENTRYPOINT is /littlekittyvcs and CMD is serve. The docs say
+    # run_command overrides the component's default. They do not say whether
+    # CMD is dropped. Build step 14 records the command that actually ran.
+    run_command: /littlekittyvcs gc
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        scope: RUN_TIME
+        type: GENERAL
+      - key: MASTER_KEY
+        value: "<32-byte-base64>"
+        scope: RUN_TIME
+        type: SECRET
+      - key: S3_ENDPOINT
+        value: "<https://example.digitaloceanspaces.com>"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: S3_REGION
+        value: "<region>"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: S3_BUCKET
+        value: "<bucket>"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: S3_ACCESS_KEY
+        value: "<set in the control panel>"
+        scope: RUN_TIME
+        type: SECRET
+      - key: S3_SECRET_KEY
+        value: "<set in the control panel>"
+        scope: RUN_TIME
+        type: SECRET
+      - key: S3_PATH_STYLE
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      # Backup is off. To turn it on, set BACKUP_ENABLED to "true" and
+      # uncomment the variables below. S3_ACCESS_KEY_BACKUP and
+      # S3_SECRET_KEY_BACKUP are type SECRET. The endpoint and bucket must
+      # not both match the primary. gc does not read PORT, PUBLIC_URL,
+      # ANONYMOUS_READ, DENY_NON_FAST_FORWARD, or AUTO_CREATE.
+      - key: BACKUP_ENABLED
+        value: "false"
+        scope: RUN_TIME
+        type: GENERAL
+      # - key: BACKUP_INTERVAL
+      #   value: "<duration, for example 6h>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_ENDPOINT_BACKUP
+      #   value: "<https://example.digitaloceanspaces.com>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_REGION_BACKUP
+      #   value: "<region>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_BUCKET_BACKUP
+      #   value: "<bucket>"
+      #   scope: RUN_TIME
+      #   type: GENERAL
+      # - key: S3_ACCESS_KEY_BACKUP
+      #   value: "<set in the control panel>"
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: S3_SECRET_KEY_BACKUP
+      #   value: "<set in the control panel>"
+      #   scope: RUN_TIME
+      #   type: SECRET
+      # - key: S3_PATH_STYLE_BACKUP
+      #   value: "false"
+      #   scope: RUN_TIME
+      #   type: GENERAL

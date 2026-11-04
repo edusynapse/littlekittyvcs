@@ -1,0 +1,5 @@
+# Replace with your hostname. Its DNS must point at this VM, and ports 80 and
+# 443 must be open, so Caddy can get a certificate.
+git.example.com {
+	reverse_proxy app:8080
+}

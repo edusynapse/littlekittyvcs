@@ -1,0 +1,6 @@
+.git
+dev_plans
+deploy
+test
+**/*_test.go
+README.md
